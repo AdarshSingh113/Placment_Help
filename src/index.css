@@ -1,0 +1,281 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', system-ui, sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  }
+
+  body {
+    background-color: #ffffff;
+    color: #1d1d1f;
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    min-height: 100vh;
+    overflow-x: hidden;
+    selection-background-color: #0071e3;
+    selection-color: #ffffff;
+  }
+}
+
+/* Apple Top Navigation Bar */
+.apple-nav {
+  background: rgba(22, 22, 23, 0.88);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Apple Pro White & Black Card Utilities */
+.apple-card-white {
+  position: relative;
+  background: #ffffff;
+  color: #1d1d1f;
+  border-radius: 1.75rem;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05);
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.35s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.35s ease;
+  overflow: hidden;
+}
+
+.apple-card-white:hover {
+  transform: translateY(-5px) scale(1.008);
+  box-shadow: 0 24px 48px -6px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.18);
+}
+
+.apple-card-black {
+  position: relative;
+  background: #000000;
+  color: #f5f5f7;
+  border-radius: 1.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 4px 24px -2px rgba(0, 0, 0, 0.25);
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.35s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.35s ease;
+  overflow: hidden;
+}
+
+.apple-card-black:hover {
+  transform: translateY(-5px) scale(1.008);
+  box-shadow: 0 24px 56px -6px rgba(0, 0, 0, 0.5), 0 0 24px rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
+/* Diagonal Specular Sheen Animation on hover */
+.specular-sheen {
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 60%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.12) 50%,
+    transparent 100%
+  );
+  transform: skewX(-20deg);
+  pointer-events: none;
+  transition: left 0.75s ease-in-out;
+  z-index: 5;
+}
+
+.group:hover .specular-sheen,
+.apple-card-black:hover .specular-sheen,
+.apple-card-white:hover .specular-sheen {
+  left: 200%;
+}
+
+/* Subtle Floating Breathing Animation */
+@keyframes floatGentle {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+.animate-float {
+  animation: floatGentle 3.5s ease-in-out infinite;
+}
+
+/* Siri Style Radial Glow Sweep */
+@keyframes siriAura {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.animate-siri-aura {
+  background: linear-gradient(135deg, rgba(0,113,227,0.15), rgba(175,82,222,0.15), rgba(52,199,89,0.12));
+  background-size: 200% 200%;
+  animation: siriAura 6s ease infinite;
+}
+
+/* Gradient shimmer sweep */
+@keyframes shimmerSweep {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.animate-shimmer {
+  background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.2) 50%, rgba(255,255,255,0) 100%);
+  background-size: 200% 100%;
+  animation: shimmerSweep 2.5s infinite;
+}
+
+/* Ring Pulse */
+@keyframes ringPulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(0, 113, 227, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(0, 113, 227, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(0, 113, 227, 0);
+  }
+}
+
+.animate-ring-pulse {
+  animation: ringPulse 2.5s infinite cubic-bezier(0.66, 0, 0, 1);
+}
+
+/* Flame Flicker Animation */
+@keyframes flameFlicker {
+  0%, 100% {
+    transform: scale(1) rotate(0deg);
+  }
+  25% {
+    transform: scale(1.08) rotate(-4deg);
+  }
+  50% {
+    transform: scale(0.96) rotate(3deg);
+  }
+  75% {
+    transform: scale(1.05) rotate(-2deg);
+  }
+}
+
+.animate-flame {
+  animation: flameFlicker 1.8s ease-in-out infinite;
+  transform-origin: bottom center;
+}
+
+/* Audio Wave Pulse Animation */
+@keyframes waveBounce {
+  0%, 100% {
+    height: 6px;
+  }
+  50% {
+    height: 28px;
+  }
+}
+
+.animate-wave-bar {
+  animation: waveBounce 1.2s ease-in-out infinite;
+}
+
+/* iOS Voice Waveform Pulse Animation */
+@keyframes iosWavePulse {
+  0% {
+    transform: scaleY(0.25);
+    opacity: 0.6;
+  }
+  50% {
+    transform: scaleY(1.2);
+    opacity: 1;
+  }
+  100% {
+    transform: scaleY(0.4);
+    opacity: 0.75;
+  }
+}
+
+/* Mini Equalizer Bar Animations for Playing Badges */
+@keyframes iosMiniEq1 {
+  0%, 100% { height: 4px; }
+  50% { height: 13px; }
+}
+
+@keyframes iosMiniEq2 {
+  0%, 100% { height: 12px; }
+  50% { height: 5px; }
+}
+
+@keyframes iosMiniEq3 {
+  0%, 100% { height: 6px; }
+  50% { height: 15px; }
+}
+
+.animate-mini-eq-1 {
+  animation: iosMiniEq1 0.75s ease-in-out infinite alternate;
+}
+
+.animate-mini-eq-2 {
+  animation: iosMiniEq2 0.6s ease-in-out infinite alternate;
+}
+
+.animate-mini-eq-3 {
+  animation: iosMiniEq3 0.85s ease-in-out infinite alternate;
+}
+
+/* Standard apple-card fallback */
+.apple-card {
+  position: relative;
+  background: #ffffff;
+  color: #1d1d1f;
+  border-radius: 1.25rem;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 2px 14px -2px rgba(0, 0, 0, 0.05);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.apple-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px -4px rgba(0, 0, 0, 0.09);
+  border-color: rgba(0, 0, 0, 0.14);
+}
+
+/* Apple Announcement Ribbon */
+.apple-ribbon {
+  background-color: #ffffff;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  color: #1d1d1f;
+}
+
+/* Apple Precision Scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.16);
+  border-radius: 9999px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.32);
+}
+
+
+

@@ -1,0 +1,41 @@
+{
+  "entities": {
+    "AppData": {
+      "title": "AppData",
+      "description": "Comprehensive user application data including companies, questions, guesstimates, gd topics, gym logs, nutrition, and medicines",
+      "type": "object",
+      "properties": {
+        "companies": { "type": "array", "description": "Tracked companies list" },
+        "questions": { "type": "array", "description": "Question bank items" },
+        "guesstimates": { "type": "array", "description": "Guesstimate problems and models" },
+        "frameworks": { "type": "array", "description": "Estimation and problem frameworks" },
+        "gdTopics": { "type": "array", "description": "GD topics and arguments" },
+        "news": { "type": "array", "description": "Editorial news and current affairs" },
+        "dataPoints": { "type": "array", "description": "Industry facts and metrics" },
+        "mistakes": { "type": "array", "description": "Mistake bank logs" },
+        "dailyTasks": { "type": "array", "description": "Daily checklist items" },
+        "dailyLogs": { "type": "array", "description": "Daily progress reflections" },
+        "readingItems": { "type": "array", "description": "Reading and prep items" },
+        "communicationLogs": { "type": "array", "description": "Communication practice entries" },
+        "interviewRecords": { "type": "array", "description": "Mock and actual interview records" },
+        "gymLogs": { "type": "array", "description": "Daily gym attendance and workout logs" },
+        "foodItems": { "type": "array", "description": "Custom and Indian food macro library" },
+        "foodLogs": { "type": "array", "description": "Daily meal and calorie logs" },
+        "nutritionGoals": { "type": "object", "description": "Daily caloric and macro target goals" },
+        "medicines": { "type": "array", "description": "Supplements, Minoxidil and prescription cabinet" },
+        "medicineLogs": { "type": "array", "description": "Daily dosage tracking logs" },
+        "knowledgeSummaries": { "type": "array", "description": "AI Research topic and document summaries library" },
+        "customFields": { "type": "array", "description": "Custom dynamic entity fields" },
+        "userSettings": { "type": "object", "description": "User preferences and targets" },
+        "categories": { "type": "array", "description": "Active tag categories" },
+        "updatedAt": { "type": "string", "description": "Timestamp of last modification" }
+      }
+    }
+  },
+  "firestore": {
+    "/users/{userId}/appData/{docId}": {
+      "schema": "AppData",
+      "description": "Per-user application data storage"
+    }
+  }
+}

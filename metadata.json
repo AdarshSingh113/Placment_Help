@@ -1,0 +1,8 @@
+{
+  "name": "Placement OS",
+  "description": "A comprehensive placement preparation dashboard, daily reflection & focus OS, gym attendance tracker, authentic Indian nutrition log, and medicine & supplement tracker.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
