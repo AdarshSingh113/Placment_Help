@@ -20,7 +20,10 @@ import {
   AlertTriangle,
   ChevronDown,
   Video,
-  Camera
+  Camera,
+  PenLine,
+  X,
+  Save
 } from 'lucide-react';
 import { useData } from '../context/DataContext';
 import { InterviewQuestion, QuestionCategory } from '../types';
@@ -31,6 +34,381 @@ import { AudioAnswerRecorder } from '../components/AudioAnswerRecorder';
 import { VideoAnswerRecorder } from '../components/VideoAnswerRecorder';
 import { triggerCelebration } from '../utils/confetti';
 import { AnimatedCounter } from '../components/AnimatedCounter';
+import { Company, Question, CustomFieldDefinition } from '../types';
+
+interface QuestionEditFormProps {
+  question: Question;
+  categories: string[];
+  companies: Company[];
+  questionCustomFields: CustomFieldDefinition[];
+  onSave: (updates: Partial<Question>) => void;
+  onCancel: () => void;
+  onDelete?: () => void;
+}
+
+const QuestionEditForm: React.FC<QuestionEditFormProps> = ({
+  question,
+  categories,
+  companies,
+  questionCustomFields,
+  onSave,
+  onCancel,
+  onDelete,
+}) => {
+  const [draft, setDraft] = useState<Question>({ ...question });
+  const [mediaMode, setMediaMode] = useState<'video' | 'audio'>(question.hasVideoAnswer ? 'video' : 'audio');
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const currentAnswer = draft.myAnswer || '';
+  const hasStar = currentAnswer.includes('[Situation]:') || 
+                  currentAnswer.includes('[Task]:') || 
+                  currentAnswer.includes('[Action]:') || 
+                  currentAnswer.includes('[Result]:');
+
+  return (
+    <div className="space-y-4">
+      {/* Header bar with Cancel, Delete, and Save Changes */}
+      <div className="flex items-center justify-between pb-2 border-b border-neutral-800">
+        <div className="flex items-center gap-2">
+          <span className="p-1 rounded-md bg-blue-600/20 text-blue-400">
+            <Edit3 className="w-3.5 h-3.5" />
+          </span>
+          <span className="text-xs font-bold text-blue-400 uppercase tracking-wider">
+            Editing Question & Answer Formulation
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          {onDelete && (
+            confirmDelete ? (
+              <div className="flex items-center gap-1 bg-rose-950/80 border border-rose-800 rounded-lg px-2 py-1">
+                <span className="text-[11px] text-rose-300 font-semibold">Delete question?</span>
+                <button
+                  type="button"
+                  onClick={onDelete}
+                  className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-600 text-white hover:bg-rose-500 cursor-pointer"
+                >
+                  Yes
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmDelete(false)}
+                  className="px-1.5 py-0.5 rounded text-[10px] text-neutral-400 hover:text-white cursor-pointer"
+                >
+                  No
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setConfirmDelete(true)}
+                className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg text-neutral-400 hover:text-rose-400 hover:bg-rose-950/30 transition-colors cursor-pointer"
+                title="Delete this question"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Delete</span>
+              </button>
+            )
+          )}
+          <button
+            type="button"
+            onClick={onCancel}
+            className="px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 cursor-pointer transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => onSave(draft)}
+            className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-bold rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer shadow-md transition-all active:scale-95"
+          >
+            <Check className="w-3.5 h-3.5" />
+            <span>Save Changes</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Question Prompt */}
+      <div>
+        <label className="block text-xs font-semibold text-neutral-300 mb-1">
+          Question Prompt <span className="text-rose-400">*</span>
+        </label>
+        <textarea
+          rows={2}
+          value={draft.question}
+          onChange={(e) => setDraft(prev => ({ ...prev, question: e.target.value }))}
+          className="w-full px-3 py-2 text-sm rounded-xl bg-neutral-950 border border-neutral-700 text-white focus:outline-none focus:border-blue-500"
+        />
+      </div>
+
+      {/* Category, Difficulty, Company */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div>
+          <label className="block text-xs font-semibold text-neutral-300 mb-1">Category</label>
+          <select
+            value={draft.category}
+            onChange={(e) => setDraft(prev => ({ ...prev, category: e.target.value }))}
+            className="w-full px-3 py-2 text-sm rounded-xl bg-neutral-950 border border-neutral-700 text-white focus:outline-none focus:border-blue-500"
+          >
+            {categories.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-xs font-semibold text-neutral-300 mb-1">Difficulty</label>
+          <select
+            value={draft.difficulty}
+            onChange={(e) => setDraft(prev => ({ ...prev, difficulty: e.target.value as any }))}
+            className="w-full px-3 py-2 text-sm rounded-xl bg-neutral-950 border border-neutral-700 text-white focus:outline-none focus:border-blue-500"
+          >
+            <option value="Easy">Easy</option>
+            <option value="Medium">Medium</option>
+            <option value="Hard">Hard</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-xs font-semibold text-neutral-300 mb-1">
+            Company Name <span className="text-[10px] text-neutral-400">(Type or select)</span>
+          </label>
+          <input
+            type="text"
+            list="company-list-suggestions"
+            placeholder="e.g. McKinsey, Google, Goldman..."
+            value={draft.companyName || ''}
+            onChange={(e) => {
+              const val = e.target.value;
+              const matchedComp = companies.find(c => c.name.toLowerCase() === val.trim().toLowerCase());
+              setDraft(prev => ({ 
+                ...prev, 
+                companyName: val, 
+                companyId: matchedComp ? matchedComp.id : undefined 
+              }));
+            }}
+            className="w-full px-3 py-2 text-sm rounded-xl bg-neutral-950 border border-neutral-700 text-white placeholder-neutral-500 focus:outline-none focus:border-blue-500"
+          />
+          <datalist id="company-list-suggestions">
+            {companies.map((c) => (
+              <option key={c.id} value={c.name} />
+            ))}
+          </datalist>
+        </div>
+      </div>
+
+      {/* Answer Formulation Box */}
+      <div className="p-4 rounded-xl bg-blue-950/20 border border-blue-900/40 space-y-2.5">
+        <div className="flex items-center justify-between">
+          <label className="block text-xs font-bold text-blue-300 uppercase tracking-wider flex items-center gap-1.5">
+            <PenLine className="w-3.5 h-3.5 text-blue-400" />
+            <span>My Prepared Answer / Story Formulation (STAR / MECE)</span>
+          </label>
+          <div className="flex items-center gap-2 text-xs">
+            {hasStar ? (
+              <button
+                type="button"
+                onClick={() => {
+                  const cleaned = currentAnswer
+                    .replace(/\[Situation\]:\s*/gi, '')
+                    .replace(/\[Task\]:\s*/gi, '')
+                    .replace(/\[Action\]:\s*/gi, '')
+                    .replace(/\[Result\]:\s*/gi, '')
+                    .trim();
+                  setDraft(prev => ({ ...prev, myAnswer: cleaned }));
+                }}
+                className="text-amber-400 hover:text-amber-300 font-medium flex items-center gap-1 hover:underline cursor-pointer"
+              >
+                ✕ Remove STAR Framework
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  const template = `[Situation]: \n[Task]: \n[Action]: \n[Result]: `;
+                  const newAnswer = currentAnswer.trim() 
+                    ? `${template}\n\n${currentAnswer}` 
+                    : template;
+                  setDraft(prev => ({ ...prev, myAnswer: newAnswer }));
+                }}
+                className="text-blue-400 hover:text-blue-300 font-medium flex items-center gap-1 hover:underline cursor-pointer"
+              >
+                + Insert STAR Framework
+              </button>
+            )}
+          </div>
+        </div>
+
+        <textarea
+          rows={6}
+          value={draft.myAnswer || ''}
+          onChange={(e) => setDraft(prev => ({ ...prev, myAnswer: e.target.value }))}
+          placeholder="Formulate your structured STAR or MECE response..."
+          className="w-full px-3.5 py-2.5 text-sm rounded-xl bg-neutral-950 border border-neutral-700 text-white placeholder-neutral-500 focus:outline-none focus:border-blue-500 leading-relaxed font-sans"
+        />
+      </div>
+
+      {/* Spoken Response Recording in Edit Mode */}
+      <div className="pt-2 space-y-3">
+        <div className="flex items-center justify-between">
+          <label className="block text-xs font-semibold text-neutral-300">
+            Spoken Response Recording (Video & Audio)
+          </label>
+          <div className="flex items-center gap-1 p-0.5 rounded-xl bg-neutral-900 border border-neutral-800 text-xs">
+            <button
+              type="button"
+              onClick={() => setMediaMode('video')}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                mediaMode === 'video' ? 'bg-purple-600 text-white' : 'text-neutral-400 hover:text-white'
+              }`}
+            >
+              <Video className="w-3.5 h-3.5" />
+              <span>Webcam Video</span>
+              {draft.hasVideoAnswer && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />}
+            </button>
+            <button
+              type="button"
+              onClick={() => setMediaMode('audio')}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                mediaMode === 'audio' ? 'bg-blue-600 text-white' : 'text-neutral-400 hover:text-white'
+              }`}
+            >
+              <Mic2 className="w-3.5 h-3.5" />
+              <span>Voice Note</span>
+              {draft.audioAnswerUrl && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />}
+            </button>
+          </div>
+        </div>
+
+        {mediaMode === 'video' ? (
+          <VideoAnswerRecorder
+            questionId={draft.id}
+            videoUrl={draft.videoAnswerUrl}
+            hasVideoAnswer={draft.hasVideoAnswer}
+            videoAnswerDuration={draft.videoAnswerDuration}
+            videoRecordedAt={draft.videoRecordedAt}
+            onSaveVideo={(videoUrl, duration) => {
+              setDraft(prev => ({
+                ...prev,
+                hasVideoAnswer: true,
+                videoAnswerUrl: videoUrl,
+                videoAnswerDuration: duration,
+                videoRecordedAt: new Date().toISOString()
+              }));
+            }}
+            onDeleteVideo={() => {
+              setDraft(prev => ({
+                ...prev,
+                hasVideoAnswer: false,
+                videoAnswerUrl: undefined,
+                videoAnswerDuration: undefined,
+                videoRecordedAt: undefined
+              }));
+            }}
+            isDark={true}
+          />
+        ) : (
+          <AudioAnswerRecorder
+            audioUrl={draft.audioAnswerUrl}
+            durationSeconds={draft.audioAnswerDuration}
+            onSaveAudio={(audioDataUrl, duration) => {
+              setDraft(prev => ({
+                ...prev,
+                audioAnswerUrl: audioDataUrl,
+                audioAnswerDuration: duration,
+                audioRecordedAt: new Date().toISOString()
+              }));
+            }}
+            onDeleteAudio={() => {
+              setDraft(prev => ({
+                ...prev,
+                audioAnswerUrl: undefined,
+                audioAnswerDuration: undefined,
+                audioRecordedAt: undefined
+              }));
+            }}
+            isDark={true}
+          />
+        )}
+      </div>
+
+      {/* Custom fields */}
+      {questionCustomFields.length > 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-neutral-800">
+          {questionCustomFields.map((field) => (
+            <div key={field.id}>
+              <label className="block text-xs font-semibold text-neutral-400 mb-1">
+                {field.name}
+              </label>
+              <CustomFieldInput
+                field={field}
+                value={draft.customFields?.[field.id]}
+                onChange={(val) => {
+                  setDraft(prev => ({
+                    ...prev,
+                    customFields: { ...(prev.customFields || {}), [field.id]: val }
+                  }));
+                }}
+              />
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Bottom Save Bar */}
+      <div className="flex items-center justify-between gap-2 pt-2 border-t border-neutral-800">
+        <div>
+          {onDelete && (
+            confirmDelete ? (
+              <div className="flex items-center gap-1.5 bg-rose-950/80 border border-rose-800 rounded-lg px-2.5 py-1">
+                <span className="text-[11px] text-rose-300 font-semibold">Delete question permanently?</span>
+                <button
+                  type="button"
+                  onClick={onDelete}
+                  className="px-2.5 py-0.5 rounded text-xs font-bold bg-rose-600 text-white hover:bg-rose-500 cursor-pointer"
+                >
+                  Yes, Delete
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmDelete(false)}
+                  className="px-2 py-0.5 rounded text-xs text-neutral-400 hover:text-white cursor-pointer"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setConfirmDelete(true)}
+                className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg text-rose-400 hover:text-rose-300 hover:bg-rose-950/30 transition-colors cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Delete Question</span>
+              </button>
+            )
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 cursor-pointer"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => onSave(draft)}
+            className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-bold rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer shadow-md transition-all active:scale-95"
+          >
+            <Check className="w-3.5 h-3.5" />
+            <span>Save Changes</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 export const InterviewPrepView: React.FC = () => {
   const { 
@@ -59,6 +437,14 @@ export const InterviewPrepView: React.FC = () => {
   const [isFieldManagerOpen, setIsFieldManagerOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
   const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null);
+
+  // Dedicated inline response / answer editing state
+  const [editingAnswerQuestionId, setEditingAnswerQuestionId] = useState<string | null>(null);
+  const [draftAnswerText, setDraftAnswerText] = useState<string>('');
+
+  // Draft buffer for card edit mode to prevent re-render typing latency
+  const [questionDrafts, setQuestionDrafts] = useState<Record<string, Partial<Question>>>({});
+  const [questionToDeleteId, setQuestionToDeleteId] = useState<string | null>(null);
 
   // New category creation
   const [newCatInput, setNewCatInput] = useState('');
@@ -348,244 +734,21 @@ export const InterviewPrepView: React.FC = () => {
             >
               <div className="specular-sheen" />
               {isCurrentlyEditing ? (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between pb-2 border-b border-neutral-800">
-                    <span className="text-xs font-bold text-blue-400 uppercase">Editing Question</span>
-                    <button
-                      onClick={() => setEditingQuestionId(null)}
-                      className="px-3 py-1 text-xs font-bold rounded-lg bg-blue-600 text-white"
-                    >
-                      Done Editing
-                    </button>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-neutral-300 mb-1">Question</label>
-                    <textarea
-                      rows={2}
-                      value={q.question}
-                      onChange={(e) => updateQuestion(q.id, { question: e.target.value })}
-                      className="w-full px-3 py-2 text-sm rounded-xl bg-neutral-950 border border-neutral-700 text-white"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div>
-                      <label className="block text-xs font-semibold text-neutral-300 mb-1">Category</label>
-                      <select
-                        value={q.category}
-                        onChange={(e) => updateQuestion(q.id, { category: e.target.value })}
-                        className="w-full px-3 py-2 text-sm rounded-xl bg-neutral-950 border border-neutral-700 text-white"
-                      >
-                        {categories.map((c) => (
-                          <option key={c} value={c}>{c}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-semibold text-neutral-300 mb-1">Difficulty</label>
-                      <select
-                        value={q.difficulty}
-                        onChange={(e) => updateQuestion(q.id, { difficulty: e.target.value as any })}
-                        className="w-full px-3 py-2 text-sm rounded-xl bg-neutral-950 border border-neutral-700 text-white"
-                      >
-                        <option value="Easy">Easy</option>
-                        <option value="Medium">Medium</option>
-                        <option value="Hard">Hard</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-semibold text-neutral-300 mb-1">
-                        Company Name <span className="text-[10px] text-neutral-400">(Type or select)</span>
-                      </label>
-                      <input
-                        type="text"
-                        list="company-list-suggestions"
-                        placeholder="e.g. McKinsey, Google, Goldman..."
-                        value={q.companyName || ''}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          const matchedComp = companies.find(c => c.name.toLowerCase() === val.trim().toLowerCase());
-                          updateQuestion(q.id, {
-                            companyName: val,
-                            companyId: matchedComp ? matchedComp.id : undefined
-                          });
-                        }}
-                        className="w-full px-3 py-2 text-sm rounded-xl bg-neutral-950 border border-neutral-700 text-white placeholder-neutral-500 focus:outline-none focus:border-blue-500"
-                      />
-                      <datalist id="company-list-suggestions">
-                        {companies.map((c) => (
-                          <option key={c.id} value={c.name} />
-                        ))}
-                      </datalist>
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="block text-xs font-semibold text-neutral-300">
-                        My Answer / Story Formulation
-                      </label>
-                      <div className="flex items-center gap-2 text-xs">
-                        {(() => {
-                          const currentAnswer = q.myAnswer || '';
-                          const hasStar = currentAnswer.includes('[Situation]:') || 
-                                          currentAnswer.includes('[Task]:') || 
-                                          currentAnswer.includes('[Action]:') || 
-                                          currentAnswer.includes('[Result]:');
-                          
-                          if (hasStar) {
-                            return (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  // Cleanly remove STAR structure headers while keeping user text if any
-                                  const cleaned = currentAnswer
-                                    .replace(/\[Situation\]:\s*/gi, '')
-                                    .replace(/\[Task\]:\s*/gi, '')
-                                    .replace(/\[Action\]:\s*/gi, '')
-                                    .replace(/\[Result\]:\s*/gi, '')
-                                    .trim();
-                                  updateQuestion(q.id, { myAnswer: cleaned });
-                                }}
-                                className="text-amber-400 hover:text-amber-300 font-medium flex items-center gap-1 hover:underline"
-                              >
-                                ✕ Remove STAR Framework
-                              </button>
-                            );
-                          } else {
-                            return (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const template = `[Situation]: \n[Task]: \n[Action]: \n[Result]: `;
-                                  const newAnswer = currentAnswer.trim() 
-                                    ? `${template}\n\n${currentAnswer}` 
-                                    : template;
-                                  updateQuestion(q.id, { myAnswer: newAnswer });
-                                }}
-                                className="text-blue-400 hover:text-blue-300 font-medium flex items-center gap-1 hover:underline"
-                              >
-                                + Insert STAR Framework
-                              </button>
-                            );
-                          }
-                        })()}
-                      </div>
-                    </div>
-                    <textarea
-                      rows={4}
-                      value={q.myAnswer || ''}
-                      onChange={(e) => updateQuestion(q.id, { myAnswer: e.target.value })}
-                      placeholder="Write your bulletproof STAR/MECE answer..."
-                      className="w-full px-3 py-2 text-sm rounded-xl bg-neutral-950 border border-neutral-700 text-white"
-                    />
-                  </div>
-
-                  {/* Audio & Video Answer Recording in Edit Mode */}
-                  <div className="pt-2 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <label className="block text-xs font-semibold text-neutral-300">
-                        Spoken Response Recording (Video & Audio)
-                      </label>
-                      <div className="flex items-center gap-1 p-0.5 rounded-xl bg-neutral-900 border border-neutral-800 text-xs">
-                        <button
-                          type="button"
-                          onClick={() => setCardMediaMode(prev => ({ ...prev, [q.id]: 'video' }))}
-                          className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                            (cardMediaMode[q.id] || (q.hasVideoAnswer ? 'video' : 'audio')) === 'video'
-                              ? 'bg-purple-600 text-white'
-                              : 'text-neutral-400 hover:text-white'
-                          }`}
-                        >
-                          <Video className="w-3.5 h-3.5" />
-                          <span>Webcam Video</span>
-                          {q.hasVideoAnswer && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setCardMediaMode(prev => ({ ...prev, [q.id]: 'audio' }))}
-                          className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                            (cardMediaMode[q.id] || (q.hasVideoAnswer ? 'video' : 'audio')) === 'audio'
-                              ? 'bg-blue-600 text-white'
-                              : 'text-neutral-400 hover:text-white'
-                          }`}
-                        >
-                          <Mic2 className="w-3.5 h-3.5" />
-                          <span>Voice Note</span>
-                          {q.audioAnswerUrl && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />}
-                        </button>
-                      </div>
-                    </div>
-
-                    {(cardMediaMode[q.id] || (q.hasVideoAnswer ? 'video' : 'audio')) === 'video' ? (
-                      <VideoAnswerRecorder
-                        questionId={q.id}
-                        hasVideoAnswer={q.hasVideoAnswer}
-                        videoAnswerDuration={q.videoAnswerDuration}
-                        videoRecordedAt={q.videoRecordedAt}
-                        onSaveVideo={(duration) => {
-                          updateQuestion(q.id, {
-                            hasVideoAnswer: true,
-                            videoAnswerDuration: duration,
-                            videoRecordedAt: new Date().toISOString()
-                          });
-                        }}
-                        onDeleteVideo={() => {
-                          updateQuestion(q.id, {
-                            hasVideoAnswer: false,
-                            videoAnswerDuration: undefined,
-                            videoRecordedAt: undefined
-                          });
-                        }}
-                        isDark={true}
-                      />
-                    ) : (
-                      <AudioAnswerRecorder
-                        audioUrl={q.audioAnswerUrl}
-                        durationSeconds={q.audioAnswerDuration}
-                        onSaveAudio={(audioDataUrl, duration) => {
-                          updateQuestion(q.id, { 
-                            audioAnswerUrl: audioDataUrl, 
-                            audioAnswerDuration: duration,
-                            audioRecordedAt: new Date().toISOString()
-                          });
-                        }}
-                        onDeleteAudio={() => {
-                          updateQuestion(q.id, { 
-                            audioAnswerUrl: undefined, 
-                            audioAnswerDuration: undefined,
-                            audioRecordedAt: undefined
-                          });
-                        }}
-                        isDark={true}
-                      />
-                    )}
-                  </div>
-
-                  {/* Custom fields in edit */}
-                  {questionCustomFields.length > 0 && (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-neutral-800">
-                      {questionCustomFields.map((field) => (
-                        <div key={field.id}>
-                          <label className="block text-xs font-semibold text-neutral-400 mb-1">
-                            {field.name}
-                          </label>
-                          <CustomFieldInput
-                            field={field}
-                            value={q.customFields?.[field.id]}
-                            onChange={(val) => {
-                              const updated = { ...(q.customFields || {}), [field.id]: val };
-                              updateQuestion(q.id, { customFields: updated });
-                            }}
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                <QuestionEditForm
+                  question={q}
+                  categories={categories}
+                  companies={companies}
+                  questionCustomFields={questionCustomFields}
+                  onSave={(updates) => {
+                    updateQuestion(q.id, updates);
+                    setEditingQuestionId(null);
+                  }}
+                  onCancel={() => setEditingQuestionId(null)}
+                  onDelete={() => {
+                    deleteQuestion(q.id);
+                    setEditingQuestionId(null);
+                  }}
+                />
               ) : (
                 /* READ-ONLY CARD VIEW */
                 <div>
@@ -651,6 +814,22 @@ export const InterviewPrepView: React.FC = () => {
 
                     <div className="flex items-center gap-2 shrink-0">
                       <button
+                        onClick={() => {
+                          setQuestionDrafts(prev => ({ ...prev, [q.id]: { ...q } }));
+                          setEditingQuestionId(q.id);
+                        }}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
+                          isBlack 
+                            ? 'border-neutral-800 hover:border-neutral-700 bg-white/5 hover:bg-white/10 text-neutral-300 hover:text-white' 
+                            : 'border-neutral-300 hover:border-neutral-400 bg-neutral-100 hover:bg-neutral-200 text-neutral-700'
+                        }`}
+                        title="Edit question prompt & metadata"
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                        <span>Edit</span>
+                      </button>
+
+                      <button
                         onClick={() => setPracticeModalQuestionId(q.id)}
                         className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold shadow-xs cursor-pointer active:scale-95 transition-all ${
                           isBlack ? 'bg-white hover:bg-neutral-200 text-black' : 'bg-[#0071e3] hover:bg-blue-600 text-white'
@@ -662,16 +841,148 @@ export const InterviewPrepView: React.FC = () => {
                     </div>
                   </div>
 
-                  {q.myAnswer && (
-                    <div className={`mt-3 p-3.5 rounded-xl border text-xs sm:text-sm whitespace-pre-wrap ${
-                      isBlack ? 'bg-white/[0.04] border-white/[0.08] text-neutral-300' : 'bg-[#f5f5f7] border-black/[0.06] text-[#1d1d1f]'
-                    }`}>
-                      <div className={`text-[10px] font-bold uppercase tracking-wider mb-1 ${
-                        isBlack ? 'text-neutral-400' : 'text-[#86868b]'
-                      }`}>
-                        Prepared Response / Framework:
+                  {/* PREPARED RESPONSE / ANSWER SECTION */}
+                  {editingAnswerQuestionId === q.id ? (
+                    <div className="mt-3 p-4 rounded-xl border border-blue-500/50 bg-blue-950/20 space-y-3 animate-in fade-in">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="p-1 rounded-md bg-blue-500/20 text-blue-400">
+                            <PenLine className="w-3.5 h-3.5" />
+                          </span>
+                          <span className="text-xs font-bold text-blue-300 uppercase tracking-wider">
+                            Edit Prepared Response (STAR / MECE)
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {(() => {
+                            const hasStar = draftAnswerText.includes('[Situation]:') || 
+                                            draftAnswerText.includes('[Task]:') || 
+                                            draftAnswerText.includes('[Action]:') || 
+                                            draftAnswerText.includes('[Result]:');
+                            return hasStar ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const cleaned = draftAnswerText
+                                    .replace(/\[Situation\]:\s*/gi, '')
+                                    .replace(/\[Task\]:\s*/gi, '')
+                                    .replace(/\[Action\]:\s*/gi, '')
+                                    .replace(/\[Result\]:\s*/gi, '')
+                                    .trim();
+                                  setDraftAnswerText(cleaned);
+                                }}
+                                className="text-[11px] text-amber-400 hover:text-amber-300 font-medium cursor-pointer"
+                              >
+                                ✕ Remove STAR
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const template = `[Situation]: \n[Task]: \n[Action]: \n[Result]: `;
+                                  setDraftAnswerText(prev => prev.trim() ? `${template}\n\n${prev}` : template);
+                                }}
+                                className="text-[11px] text-blue-400 hover:text-blue-300 font-medium cursor-pointer"
+                              >
+                                + Insert STAR
+                              </button>
+                            );
+                          })()}
+                        </div>
                       </div>
-                      {q.myAnswer}
+
+                      <textarea
+                        rows={6}
+                        value={draftAnswerText}
+                        onChange={(e) => setDraftAnswerText(e.target.value)}
+                        placeholder="Type your structured STAR or MECE response here..."
+                        className="w-full px-3.5 py-2.5 text-xs sm:text-sm rounded-xl bg-neutral-950 border border-neutral-700 text-white placeholder-neutral-500 focus:outline-none focus:border-blue-500 leading-relaxed font-sans"
+                        autoFocus
+                      />
+
+                      <div className="flex items-center justify-between pt-1">
+                        <span className="text-[10px] text-neutral-500 font-mono">
+                          {draftAnswerText.trim().split(/\s+/).filter(Boolean).length} words
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setEditingAnswerQuestionId(null)}
+                            className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-neutral-800 text-neutral-300 hover:bg-neutral-700 cursor-pointer transition-colors"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              updateQuestion(q.id, { myAnswer: draftAnswerText });
+                              setEditingAnswerQuestionId(null);
+                            }}
+                            className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white cursor-pointer shadow-md transition-all active:scale-95"
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                            <span>Save Answer</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : q.myAnswer ? (
+                    <div 
+                      onClick={() => {
+                        setEditingAnswerQuestionId(q.id);
+                        setDraftAnswerText(q.myAnswer || '');
+                      }}
+                      className={`mt-3 p-3.5 rounded-xl border text-xs sm:text-sm whitespace-pre-wrap group/ans relative cursor-pointer transition-all hover:border-blue-500/40 ${
+                        isBlack ? 'bg-white/[0.04] border-white/[0.08] text-neutral-300 hover:bg-white/[0.06]' : 'bg-[#f5f5f7] border-black/[0.06] text-[#1d1d1f] hover:bg-[#f0f0f2]'
+                      }`}
+                      title="Click anywhere to edit this answer"
+                    >
+                      <div className="flex items-center justify-between mb-1.5">
+                        <div className={`text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 ${
+                          isBlack ? 'text-neutral-400' : 'text-[#86868b]'
+                        }`}>
+                          <span>Prepared Response / Framework:</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingAnswerQuestionId(q.id);
+                            setDraftAnswerText(q.myAnswer || '');
+                          }}
+                          className="flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 cursor-pointer transition-colors"
+                        >
+                          <Edit3 className="w-3 h-3" />
+                          <span>Edit Answer</span>
+                        </button>
+                      </div>
+                      <div className="leading-relaxed">
+                        {q.myAnswer}
+                      </div>
+                    </div>
+                  ) : (
+                    <div 
+                      onClick={() => {
+                        setEditingAnswerQuestionId(q.id);
+                        setDraftAnswerText('');
+                      }}
+                      className={`mt-3 p-3.5 rounded-xl border border-dashed text-xs sm:text-sm flex items-center justify-between gap-3 cursor-pointer transition-all ${
+                        isBlack 
+                          ? 'border-neutral-800 hover:border-neutral-600 bg-neutral-950/40 hover:bg-neutral-900/40 text-neutral-400 hover:text-neutral-200' 
+                          : 'border-neutral-300 hover:border-neutral-400 bg-neutral-50/60 hover:bg-neutral-100/60 text-neutral-600 hover:text-neutral-900'
+                      }`}
+                      title="Click to write prepared answer"
+                    >
+                      <div className="flex items-center gap-2">
+                        <PenLine className="w-4 h-4 text-blue-400 shrink-0" />
+                        <span className="text-xs">No prepared answer written yet.</span>
+                      </div>
+                      <button
+                        type="button"
+                        className="px-3 py-1.5 rounded-lg text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white shrink-0 shadow-xs cursor-pointer transition-colors"
+                      >
+                        + Write Answer
+                      </button>
                     </div>
                   )}
 
@@ -712,12 +1023,14 @@ export const InterviewPrepView: React.FC = () => {
                     {(cardMediaMode[q.id] || (q.hasVideoAnswer ? 'video' : 'audio')) === 'video' ? (
                       <VideoAnswerRecorder
                         questionId={q.id}
+                        videoUrl={q.videoAnswerUrl}
                         hasVideoAnswer={q.hasVideoAnswer}
                         videoAnswerDuration={q.videoAnswerDuration}
                         videoRecordedAt={q.videoRecordedAt}
-                        onSaveVideo={(duration) => {
+                        onSaveVideo={(videoUrl, duration) => {
                           updateQuestion(q.id, {
                             hasVideoAnswer: true,
+                            videoAnswerUrl: videoUrl,
                             videoAnswerDuration: duration,
                             videoRecordedAt: new Date().toISOString()
                           });
@@ -725,6 +1038,7 @@ export const InterviewPrepView: React.FC = () => {
                         onDeleteVideo={() => {
                           updateQuestion(q.id, {
                             hasVideoAnswer: false,
+                            videoAnswerUrl: undefined,
                             videoAnswerDuration: undefined,
                             videoRecordedAt: undefined
                           });
@@ -796,13 +1110,36 @@ export const InterviewPrepView: React.FC = () => {
                       >
                         <Copy className="w-3.5 h-3.5" />
                       </button>
-                      <button
-                        onClick={() => deleteQuestion(q.id)}
-                        className="p-1.5 text-neutral-500 hover:text-rose-400 rounded-lg hover:bg-rose-950/40 cursor-pointer"
-                        title="Delete Question"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      {questionToDeleteId === q.id ? (
+                        <div className="flex items-center gap-1 bg-rose-950/90 border border-rose-800 rounded-lg px-2 py-0.5 animate-in fade-in">
+                          <span className="text-[10px] text-rose-300 font-semibold">Delete?</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              deleteQuestion(q.id);
+                              setQuestionToDeleteId(null);
+                            }}
+                            className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-600 text-white hover:bg-rose-500 cursor-pointer transition-colors"
+                          >
+                            Yes
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setQuestionToDeleteId(null)}
+                            className="px-1.5 py-0.5 rounded text-[10px] text-neutral-400 hover:text-white cursor-pointer transition-colors"
+                          >
+                            No
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setQuestionToDeleteId(q.id)}
+                          className="p-1.5 text-neutral-500 hover:text-rose-400 rounded-lg hover:bg-rose-950/40 cursor-pointer transition-colors"
+                          title="Delete Question"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -922,12 +1259,14 @@ export const InterviewPrepView: React.FC = () => {
                 {practiceMediaMode === 'video' ? (
                   <VideoAnswerRecorder
                     questionId={activePracticeQuestion.id}
+                    videoUrl={activePracticeQuestion.videoAnswerUrl}
                     hasVideoAnswer={activePracticeQuestion.hasVideoAnswer}
                     videoAnswerDuration={activePracticeQuestion.videoAnswerDuration}
                     videoRecordedAt={activePracticeQuestion.videoRecordedAt}
-                    onSaveVideo={(duration) => {
+                    onSaveVideo={(videoUrl, duration) => {
                       updateQuestion(activePracticeQuestion.id, {
                         hasVideoAnswer: true,
+                        videoAnswerUrl: videoUrl,
                         videoAnswerDuration: duration,
                         videoRecordedAt: new Date().toISOString()
                       });
@@ -935,6 +1274,7 @@ export const InterviewPrepView: React.FC = () => {
                     onDeleteVideo={() => {
                       updateQuestion(activePracticeQuestion.id, {
                         hasVideoAnswer: false,
+                        videoAnswerUrl: undefined,
                         videoAnswerDuration: undefined,
                         videoRecordedAt: undefined
                       });
@@ -966,9 +1306,22 @@ export const InterviewPrepView: React.FC = () => {
 
               {/* Answer Notes / Live Refinements */}
               <div className="space-y-2">
-                <label className="block text-xs font-bold text-neutral-300 uppercase tracking-wider">
-                  Live Practice Notes & Delivery Formulation:
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-neutral-300 uppercase tracking-wider flex items-center gap-1.5">
+                    <PenLine className="w-3.5 h-3.5 text-blue-400" />
+                    <span>Live Practice Notes & Delivery Formulation:</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      updateQuestion(activePracticeQuestion.id, { myAnswer: practiceNotes });
+                    }}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white cursor-pointer shadow-xs transition-colors"
+                  >
+                    <Save className="w-3 h-3" />
+                    <span>Save to Answer</span>
+                  </button>
+                </div>
                 <textarea
                   rows={4}
                   value={practiceNotes}

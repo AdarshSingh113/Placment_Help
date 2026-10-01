@@ -50,6 +50,7 @@ import { initialKnowledgeSummaries } from '../data/sampleKnowledge';
 import { useAuth } from './AuthContext';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
+import { deleteVideoBlob } from '../utils/mediaStorage';
 
 interface SearchResultItem {
   id: string;
@@ -144,11 +145,12 @@ interface DataContextType {
 
   // Questions
   addQuestion: (q: Omit<Question, 'id' | 'createdAt' | 'updatedAt'>) => string;
-  updateQuestion: (id: string, updates: Partial<Question>) => void;
+  updateQuestion: (id: string, updates: Partial<Question>, silent?: boolean) => void;
   deleteQuestion: (id: string) => void;
   duplicateQuestion: (id: string) => void;
   toggleQuestionFavorite: (id: string) => void;
   logQuestionPractice: (id: string, confidence: number, timeTakenSeconds?: number, feedback?: string) => void;
+  recordQuestionPractice: (id: string, confidence: number, notes?: string) => void;
 
   // Guesstimates
   addGuesstimate: (g: Omit<Guesstimate, 'id' | 'createdAt' | 'updatedAt'>) => string;
@@ -1029,14 +1031,40 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return id;
   };
 
-  const updateQuestion = (id: string, updates: Partial<Question>) => {
+  const updateQuestion = (id: string, updates: Partial<Question>, silent = false) => {
     setQuestions((prev) => prev.map((q) => (q.id === id ? { ...q, ...updates, updatedAt: new Date().toISOString() } : q)));
-    showToast('Question updated');
+    if (!silent) {
+      showToast('Question updated');
+    }
+  };
+
+  const recordQuestionPractice = (id: string, confidence: number, notes?: string) => {
+    setQuestions((prev) => prev.map((q) => {
+      if (q.id === id) {
+        return {
+          ...q,
+          confidence,
+          status: confidence >= 5 ? 'Mastered' : confidence >= 3 ? 'Practiced' : 'Needs Practice',
+          practiceCount: (q.practiceCount || 0) + 1,
+          lastPracticed: new Date().toISOString().split('T')[0],
+          myAnswer: notes !== undefined && notes !== null ? notes : q.myAnswer,
+          updatedAt: new Date().toISOString()
+        };
+      }
+      return q;
+    }));
+    showToast('Practice recorded & answer updated!');
   };
 
   const deleteQuestion = (id: string) => {
-    setQuestions((prev) => prev.filter((q) => q.id !== id));
-    showToast('Question removed');
+    setQuestions((prev) => {
+      const updated = prev.filter((q) => q.id !== id);
+      persistToCloud({ ...buildSyncPayload(), questions: updated });
+      return updated;
+    });
+    if (practiceModalQuestionId === id) setPracticeModalQuestionId(null);
+    deleteVideoBlob(id).catch((err) => console.warn('Could not delete video blob from storage:', err));
+    showToast('Question deleted');
   };
 
   const duplicateQuestion = (id: string) => {
@@ -2061,6 +2089,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         duplicateQuestion,
         toggleQuestionFavorite,
         logQuestionPractice,
+        recordQuestionPractice,
 
         addGuesstimate,
         updateGuesstimate,

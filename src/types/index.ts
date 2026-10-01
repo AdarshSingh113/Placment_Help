@@ -100,6 +100,7 @@ export interface Question {
 
   // Video Answer Recording (Webcam Spoken Mock)
   hasVideoAnswer?: boolean;
+  videoAnswerUrl?: string;
   videoAnswerDuration?: number;
   videoRecordedAt?: string;
   

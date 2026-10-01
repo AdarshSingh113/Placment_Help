@@ -12,25 +12,26 @@ import {
   Trash2, 
   Download, 
   AlertCircle, 
-  Maximize2,
   FlipHorizontal,
-  Sparkles,
-  Camera
+  Camera,
+  CheckCircle2
 } from 'lucide-react';
 import { saveVideoBlob, getVideoBlob, deleteVideoBlob } from '../utils/mediaStorage';
 
 interface VideoAnswerRecorderProps {
   questionId: string;
+  videoUrl?: string;
   hasVideoAnswer?: boolean;
   videoAnswerDuration?: number;
   videoRecordedAt?: string;
-  onSaveVideo: (durationSeconds: number) => void;
+  onSaveVideo: (videoUrl: string, durationSeconds: number) => void;
   onDeleteVideo: () => void;
   isDark?: boolean;
 }
 
 export const VideoAnswerRecorder: React.FC<VideoAnswerRecorderProps> = ({
   questionId,
+  videoUrl: propVideoUrl,
   hasVideoAnswer,
   videoAnswerDuration = 0,
   videoRecordedAt,
@@ -44,9 +45,10 @@ export const VideoAnswerRecorder: React.FC<VideoAnswerRecorderProps> = ({
   const [countdown, setCountdown] = useState(3);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isMirrored, setIsMirrored] = useState(true);
+  const [saveSuccessNotice, setSaveSuccessNotice] = useState(false);
 
   // Playback state
-  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [currentVideoUrl, setCurrentVideoUrl] = useState<string | null>(propVideoUrl || null);
   const [duration, setDuration] = useState(videoAnswerDuration);
   const [isPlaying, setIsPlaying] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -57,41 +59,54 @@ export const VideoAnswerRecorder: React.FC<VideoAnswerRecorderProps> = ({
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const videoChunksRef = useRef<Blob[]>([]);
   const timerIntervalRef = useRef<number | null>(null);
-  const currentBlobRef = useRef<Blob | null>(null);
+  const recordSecondsRef = useRef(0);
+  const modeRef = useRef(mode);
+  modeRef.current = mode;
 
-  // Load existing video from IndexedDB on mount or questionId change
+  // Load existing video from prop or IndexedDB / Memory Cache
   useEffect(() => {
     let active = true;
-    let createdUrl: string | null = null;
 
-    const loadVideo = async () => {
+    const resolveVideo = async () => {
+      // 1. If propVideoUrl is directly provided
+      if (propVideoUrl) {
+        if (active) {
+          setCurrentVideoUrl(propVideoUrl);
+          setDuration(videoAnswerDuration || 0);
+          setMode('recorded');
+        }
+        return;
+      }
+
+      // 2. If marked as having video, load from media storage
       if (hasVideoAnswer) {
         const result = await getVideoBlob(questionId);
-        if (active && result && result.blob) {
-          createdUrl = URL.createObjectURL(result.blob);
-          currentBlobRef.current = result.blob;
-          setVideoUrl(createdUrl);
-          setDuration(result.duration || videoAnswerDuration);
+        if (active && result) {
+          setCurrentVideoUrl(result.url);
+          setDuration(result.duration || videoAnswerDuration || 0);
           setMode('recorded');
-        } else if (active) {
-          setMode('idle');
-          setVideoUrl(null);
+          return;
         }
-      } else {
+      }
+
+      // 3. Otherwise if currently in recorded mode and questionId hasn't changed, retain state
+      if (modeRef.current === 'recorded' && currentVideoUrl) {
+        return;
+      }
+
+      // 4. Default idle state
+      if (active && modeRef.current !== 'recording' && modeRef.current !== 'counting' && modeRef.current !== 'previewing') {
         setMode('idle');
-        setVideoUrl(null);
+        setCurrentVideoUrl(null);
       }
     };
 
-    loadVideo();
+    resolveVideo();
 
     return () => {
       active = false;
-      if (createdUrl) {
-        URL.revokeObjectURL(createdUrl);
-      }
     };
-  }, [questionId, hasVideoAnswer, videoAnswerDuration]);
+  }, [questionId, propVideoUrl, hasVideoAnswer, videoAnswerDuration]);
 
   // Clean up streams & timers on unmount
   useEffect(() => {
@@ -105,7 +120,11 @@ export const VideoAnswerRecorder: React.FC<VideoAnswerRecorderProps> = ({
 
   const stopMediaStream = () => {
     if (mediaStreamRef.current) {
-      mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+      try {
+        mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+      } catch (e) {
+        console.warn('Track stop error:', e);
+      }
       mediaStreamRef.current = null;
     }
   };
@@ -127,8 +146,8 @@ export const VideoAnswerRecorder: React.FC<VideoAnswerRecorderProps> = ({
 
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
-          width: { ideal: 1280, max: 1920 },
-          height: { ideal: 720, max: 1080 },
+          width: { ideal: 640, max: 1280 },
+          height: { ideal: 480, max: 720 },
           facingMode: 'user',
         },
         audio: true,
@@ -176,25 +195,38 @@ export const VideoAnswerRecorder: React.FC<VideoAnswerRecorderProps> = ({
     if (!mediaStreamRef.current) return;
 
     videoChunksRef.current = [];
+    recordSecondsRef.current = 0;
+    setRecordSeconds(0);
 
-    // Choose supported MIME type
+    // Choose best supported MIME type
     const mimeTypes = [
-      'video/webm;codecs=vp9,opus',
       'video/webm;codecs=vp8,opus',
+      'video/webm;codecs=vp9,opus',
       'video/webm',
       'video/mp4',
       ''
     ];
     let selectedMime = '';
     for (const m of mimeTypes) {
-      if (!m || MediaRecorder.isTypeSupported(m)) {
+      if (!m || (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(m))) {
         selectedMime = m;
         break;
       }
     }
 
-    const options = selectedMime ? { mimeType: selectedMime } : undefined;
-    const mediaRecorder = new MediaRecorder(mediaStreamRef.current, options);
+    const options: MediaRecorderOptions = {
+      ...(selectedMime ? { mimeType: selectedMime } : {}),
+      videoBitsPerSecond: 300000, // 300 kbps - crisp for interview webcams while keeping files compact
+      audioBitsPerSecond: 64000
+    };
+
+    let mediaRecorder: MediaRecorder;
+    try {
+      mediaRecorder = new MediaRecorder(mediaStreamRef.current, options);
+    } catch (e) {
+      // Fallback without bitrate constraints
+      mediaRecorder = new MediaRecorder(mediaStreamRef.current);
+    }
     mediaRecorderRef.current = mediaRecorder;
 
     mediaRecorder.ondataavailable = (event) => {
@@ -204,32 +236,56 @@ export const VideoAnswerRecorder: React.FC<VideoAnswerRecorderProps> = ({
     };
 
     mediaRecorder.onstop = async () => {
-      stopMediaStream();
-      const mime = mediaRecorder.mimeType || 'video/webm';
-      const blob = new Blob(videoChunksRef.current, { type: mime });
-      currentBlobRef.current = blob;
+      try {
+        stopMediaStream();
+        const mime = mediaRecorder.mimeType || 'video/webm';
+        const blob = new Blob(videoChunksRef.current, { type: mime });
 
-      const finalDuration = recordSeconds > 0 ? recordSeconds : 1;
-      setDuration(finalDuration);
+        const finalDuration = recordSecondsRef.current > 0 ? recordSecondsRef.current : 1;
+        setDuration(finalDuration);
 
-      // Save to IndexedDB
-      await saveVideoBlob(questionId, blob, finalDuration);
+        // 1. Immediately store in resilient cache & IndexedDB
+        const objectUrl = await saveVideoBlob(questionId, blob, finalDuration);
+        setCurrentVideoUrl(objectUrl);
+        setMode('recorded');
 
-      // Create local URL for immediate playback
-      const newUrl = URL.createObjectURL(blob);
-      setVideoUrl(newUrl);
-      setMode('recorded');
+        // 2. Prepare base64 Data URL if <= 2MB for cloud sync & direct storage
+        let videoStorageUrl = objectUrl;
+        try {
+          if (blob.size <= 2000000) {
+            const reader = new FileReader();
+            const base64Promise = new Promise<string>((resolve) => {
+              reader.onloadend = () => resolve(reader.result as string);
+              reader.onerror = () => resolve('');
+              reader.readAsDataURL(blob);
+            });
+            const base64 = await base64Promise;
+            if (base64) {
+              videoStorageUrl = base64;
+            }
+          }
+        } catch (convErr) {
+          console.warn('Base64 data url generation skipped:', convErr);
+        }
 
-      // Update question state
-      onSaveVideo(finalDuration);
+        // 3. Update question state in DataContext & Firestore
+        onSaveVideo(videoStorageUrl, finalDuration);
+
+        // 4. Show success badge
+        setSaveSuccessNotice(true);
+        setTimeout(() => setSaveSuccessNotice(false), 3500);
+      } catch (saveErr) {
+        console.error('Error saving video recording:', saveErr);
+        setErrorMessage('Failed to save recorded video. Please try again.');
+      }
     };
 
-    mediaRecorder.start(500); // 500ms data chunks
+    mediaRecorder.start(250); // Emit 250ms chunks so no data is dropped
     setMode('recording');
-    setRecordSeconds(0);
 
     timerIntervalRef.current = window.setInterval(() => {
-      setRecordSeconds((prev) => prev + 1);
+      recordSecondsRef.current += 1;
+      setRecordSeconds(recordSecondsRef.current);
     }, 1000);
   };
 
@@ -240,6 +296,11 @@ export const VideoAnswerRecorder: React.FC<VideoAnswerRecorderProps> = ({
       timerIntervalRef.current = null;
     }
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      try {
+        mediaRecorderRef.current.requestData();
+      } catch (e) {
+        console.warn('requestData error on stop:', e);
+      }
       mediaRecorderRef.current.stop();
     }
   };
@@ -251,10 +312,12 @@ export const VideoAnswerRecorder: React.FC<VideoAnswerRecorderProps> = ({
       timerIntervalRef.current = null;
     }
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-      mediaRecorderRef.current.stop();
+      try {
+        mediaRecorderRef.current.stop();
+      } catch (_) {}
     }
     stopMediaStream();
-    if (hasVideoAnswer && videoUrl) {
+    if (currentVideoUrl) {
       setMode('recorded');
     } else {
       setMode('idle');
@@ -264,11 +327,7 @@ export const VideoAnswerRecorder: React.FC<VideoAnswerRecorderProps> = ({
   // 4. Delete Video
   const handleDeleteVideo = async () => {
     await deleteVideoBlob(questionId);
-    if (videoUrl) {
-      URL.revokeObjectURL(videoUrl);
-    }
-    setVideoUrl(null);
-    currentBlobRef.current = null;
+    setCurrentVideoUrl(null);
     setConfirmDelete(false);
     setMode('idle');
     onDeleteVideo();
@@ -276,26 +335,13 @@ export const VideoAnswerRecorder: React.FC<VideoAnswerRecorderProps> = ({
 
   // 5. Download Video file
   const handleDownload = () => {
-    if (!videoUrl) return;
+    if (!currentVideoUrl) return;
     const a = document.createElement('a');
-    a.href = videoUrl;
-    a.download = `interview_answer_${questionId}_${Date.now()}.webm`;
+    a.href = currentVideoUrl;
+    a.download = `interview_mock_${questionId}_${Date.now()}.webm`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-  };
-
-  // 6. Play / Pause toggle
-  const togglePlay = () => {
-    if (!videoPlayerRef.current) return;
-    if (isPlaying) {
-      videoPlayerRef.current.pause();
-      setIsPlaying(false);
-    } else {
-      videoPlayerRef.current.play().then(() => {
-        setIsPlaying(true);
-      }).catch(console.error);
-    }
   };
 
   return (
@@ -308,6 +354,19 @@ export const VideoAnswerRecorder: React.FC<VideoAnswerRecorderProps> = ({
           <AlertCircle className="w-4 h-4 shrink-0" />
           <span>{errorMessage}</span>
         </div>
+      )}
+
+      {/* Save Success Banner */}
+      {saveSuccessNotice && (
+        <motion.div
+          initial={{ opacity: 0, y: -5 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0 }}
+          className="p-2.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs flex items-center gap-2"
+        >
+          <CheckCircle2 className="w-4 h-4 shrink-0" />
+          <span>Video answer saved successfully!</span>
+        </motion.div>
       )}
 
       {/* STATE 1: IDLE - Prompt to record video */}
@@ -430,7 +489,7 @@ export const VideoAnswerRecorder: React.FC<VideoAnswerRecorderProps> = ({
       )}
 
       {/* STATE 3: RECORDED VIDEO PLAYBACK & MANAGEMENT */}
-      {mode === 'recorded' && videoUrl && (
+      {mode === 'recorded' && currentVideoUrl && (
         <div className="space-y-3">
           {/* Header with Title and Actions */}
           <div className="flex items-center justify-between">
@@ -511,14 +570,14 @@ export const VideoAnswerRecorder: React.FC<VideoAnswerRecorderProps> = ({
             </div>
           </div>
 
-          {/* Embedded Video Player with controls */}
+          {/* Embedded Video Player with native controls */}
           <div className="relative rounded-2xl overflow-hidden bg-black border border-neutral-800 aspect-video shadow-md group/player">
             <video
               ref={videoPlayerRef}
-              src={videoUrl}
+              src={currentVideoUrl}
               controls
               playsInline
-              preload="metadata"
+              preload="auto"
               onPlay={() => setIsPlaying(true)}
               onPause={() => setIsPlaying(false)}
               onEnded={() => setIsPlaying(false)}
