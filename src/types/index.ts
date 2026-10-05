@@ -52,6 +52,10 @@ export interface Company {
   recentDevelopments?: string;
   importantMetrics?: string;
   myNotes?: string;
+  whyThisCompanyPitch?: string;
+  keyQuestionsTalkingPoints?: string;
+  questionsForPartner?: string;
+  preInterviewAnswers?: Record<string, string>;
   isFavorite?: boolean;
   customFields?: CustomFieldValues;
   createdAt: string;

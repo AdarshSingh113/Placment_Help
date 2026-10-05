@@ -138,7 +138,7 @@ interface DataContextType {
   // CRUD Actions
   // Companies
   addCompany: (comp: Omit<Company, 'id' | 'createdAt' | 'updatedAt'>) => string;
-  updateCompany: (id: string, updates: Partial<Company>) => void;
+  updateCompany: (id: string, updates: Partial<Company>, silent?: boolean) => void;
   deleteCompany: (id: string) => void;
   duplicateCompany: (id: string) => void;
   toggleCompanyFavorite: (id: string) => void;
@@ -298,6 +298,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(() => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
   const isCloudInitializedRef = useRef<boolean>(false);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastLocalMutationTimeRef = useRef<number>(0);
 
   // Entities state with bulletproof safe parsing
   const [companies, setCompanies] = useState<Company[]>(() => 
@@ -656,8 +657,28 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         if (snapshot.exists()) {
           const data = snapshot.data();
-          if (Array.isArray(data.companies)) setCompanies(data.companies);
-          if (Array.isArray(data.questions)) setQuestions(data.questions);
+          const serverUpdatedTime = data.updatedAt ? new Date(data.updatedAt).getTime() : 0;
+
+          // If snapshot has an updatedAt older than our latest local mutation, skip to prevent rollback
+          if (serverUpdatedTime && lastLocalMutationTimeRef.current && serverUpdatedTime < lastLocalMutationTimeRef.current) {
+            return;
+          }
+
+          if (Array.isArray(data.companies)) {
+            setCompanies((prev) => {
+              const serverIds = new Set(data.companies.map((c: any) => c.id));
+              const pendingLocal = prev.filter(c => !serverIds.has(c.id) && c.createdAt && (Date.now() - new Date(c.createdAt).getTime() < 60000));
+              return [...pendingLocal, ...data.companies];
+            });
+          }
+
+          if (Array.isArray(data.questions)) {
+            setQuestions((prev) => {
+              const serverIds = new Set(data.questions.map((q: any) => q.id));
+              const pendingLocal = prev.filter(q => !serverIds.has(q.id) && q.createdAt && (Date.now() - new Date(q.createdAt).getTime() < 60000));
+              return [...pendingLocal, ...data.questions];
+            });
+          }
           if (Array.isArray(data.guesstimates)) setGuesstimates(data.guesstimates);
           if (Array.isArray(data.frameworks)) setFrameworks(data.frameworks);
           if (Array.isArray(data.gdTopics)) setGdTopics(data.gdTopics);
@@ -977,20 +998,41 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Company CRUD
   const addCompany = (comp: Omit<Company, 'id' | 'createdAt' | 'updatedAt'>) => {
     const id = `comp_${Date.now()}`;
+    const nowStr = new Date().toISOString();
     const newComp: Company = {
       ...comp,
       id,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      createdAt: nowStr,
+      updatedAt: nowStr
     };
-    setCompanies((prev) => [newComp, ...prev]);
+    lastLocalMutationTimeRef.current = Date.now();
+    setCompanies((prev) => {
+      const updated = [newComp, ...prev];
+      persistToCloud({ ...buildSyncPayload(), companies: updated });
+      return updated;
+    });
     showToast(`Added ${newComp.name} to company database`);
     return id;
   };
 
-  const updateCompany = (id: string, updates: Partial<Company>) => {
-    setCompanies((prev) => prev.map((c) => (c.id === id ? { ...c, ...updates, updatedAt: new Date().toISOString() } : c)));
-    showToast('Company updated successfully');
+  const updateCompany = (id: string, updates: Partial<Company>, silent = false) => {
+    lastLocalMutationTimeRef.current = Date.now();
+    let updatedQuestions = questions;
+    if (updates.name) {
+      setQuestions((prevQ) => {
+        const nextQ = prevQ.map((q) => (q.companyId === id ? { ...q, companyName: updates.name } : q));
+        updatedQuestions = nextQ;
+        return nextQ;
+      });
+    }
+    setCompanies((prev) => {
+      const updated = prev.map((c) => (c.id === id ? { ...c, ...updates, updatedAt: new Date().toISOString() } : c));
+      persistToCloud({ ...buildSyncPayload(), companies: updated, questions: updatedQuestions });
+      return updated;
+    });
+    if (!silent) {
+      showToast('Company updated successfully');
+    }
   };
 
   const deleteCompany = (id: string) => {
@@ -1019,20 +1061,31 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Question CRUD
   const addQuestion = (q: Omit<Question, 'id' | 'createdAt' | 'updatedAt'>) => {
-    const id = `q_${Date.now()}`;
+    const id = `q_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const nowStr = new Date().toISOString();
     const newQ: Question = {
       ...q,
       id,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      createdAt: nowStr,
+      updatedAt: nowStr
     };
-    setQuestions((prev) => [newQ, ...prev]);
+    lastLocalMutationTimeRef.current = Date.now();
+    setQuestions((prev) => {
+      const updated = [newQ, ...prev];
+      persistToCloud({ ...buildSyncPayload(), questions: updated });
+      return updated;
+    });
     showToast('Added interview question to question bank');
     return id;
   };
 
   const updateQuestion = (id: string, updates: Partial<Question>, silent = false) => {
-    setQuestions((prev) => prev.map((q) => (q.id === id ? { ...q, ...updates, updatedAt: new Date().toISOString() } : q)));
+    lastLocalMutationTimeRef.current = Date.now();
+    setQuestions((prev) => {
+      const updated = prev.map((q) => (q.id === id ? { ...q, ...updates, updatedAt: new Date().toISOString() } : q));
+      persistToCloud({ ...buildSyncPayload(), questions: updated });
+      return updated;
+    });
     if (!silent) {
       showToast('Question updated');
     }

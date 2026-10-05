@@ -446,6 +446,85 @@ export const InterviewPrepView: React.FC = () => {
   const [questionDrafts, setQuestionDrafts] = useState<Record<string, Partial<Question>>>({});
   const [questionToDeleteId, setQuestionToDeleteId] = useState<string | null>(null);
 
+  // Dedicated Add Question Modal State
+  const [isAddQuestionModalOpen, setIsAddQuestionModalOpen] = useState(false);
+  const [addQuestionForm, setAddQuestionForm] = useState({
+    prompt: '',
+    category: 'HR',
+    difficulty: 'Medium' as 'Easy' | 'Medium' | 'Hard',
+    companyName: '',
+    answer: ''
+  });
+
+  const handleOpenAddQuestion = () => {
+    setAddQuestionForm({
+      prompt: '',
+      category: selectedCategory !== 'All' ? selectedCategory : 'HR',
+      difficulty: difficultyFilter !== 'All' ? (difficultyFilter as any) : 'Medium',
+      companyName: selectedCompanyFilter !== 'All' ? companies.find(c => c.id === selectedCompanyFilter)?.name || '' : '',
+      answer: ''
+    });
+    setIsAddQuestionModalOpen(true);
+  };
+
+  const handleCreateQuestionSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!addQuestionForm.prompt.trim()) return;
+
+    const matchedComp = companies.find(c => c.name.toLowerCase() === addQuestionForm.companyName.trim().toLowerCase());
+
+    const createdId = addQuestion({
+      question: addQuestionForm.prompt.trim(),
+      category: addQuestionForm.category,
+      difficulty: addQuestionForm.difficulty,
+      companyName: addQuestionForm.companyName.trim() || undefined,
+      companyId: matchedComp ? matchedComp.id : undefined,
+      myAnswer: addQuestionForm.answer.trim() || undefined,
+      confidence: 3,
+      status: 'Needs Practice',
+      practiceCount: 0
+    });
+
+    // Reset filters to guarantee new question is immediately visible in the active list
+    setSearchTerm('');
+    setDifficultyFilter('All');
+    setStatusFilter('All');
+    setSelectedCompanyFilter('All');
+    setSelectedCategory('All');
+
+    triggerCelebration();
+    setIsAddQuestionModalOpen(false);
+  };
+
+  // Quick inline add question bar state
+  const [quickPrompt, setQuickPrompt] = useState('');
+  const [quickCategory, setQuickCategory] = useState('HR');
+
+  const handleQuickInlineAddQuestion = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!quickPrompt.trim()) {
+      handleOpenAddQuestion();
+      return;
+    }
+
+    addQuestion({
+      question: quickPrompt.trim(),
+      category: quickCategory,
+      difficulty: 'Medium',
+      confidence: 3,
+      status: 'Needs Practice',
+      practiceCount: 0
+    });
+
+    setQuickPrompt('');
+    setSearchTerm('');
+    setDifficultyFilter('All');
+    setStatusFilter('All');
+    setSelectedCompanyFilter('All');
+    setSelectedCategory('All');
+    triggerCelebration();
+  };
+
   // New category creation
   const [newCatInput, setNewCatInput] = useState('');
   const [showAddCat, setShowAddCat] = useState(false);
@@ -567,18 +646,8 @@ export const InterviewPrepView: React.FC = () => {
             whileHover={{ scale: 1.04 }}
             whileTap={{ scale: 0.95 }}
             id="btn_add_new_question"
-            onClick={() => {
-              const newId = addQuestion({
-                question: 'New Interview Question (Click edit to write question)',
-                category: selectedCategory !== 'All' ? selectedCategory : 'HR',
-                difficulty: 'Medium',
-                confidence: 3,
-                status: 'Needs Practice',
-                practiceCount: 0
-              });
-              setEditingQuestionId(newId);
-            }}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold bg-blue-600 hover:bg-blue-500 text-white shadow-md shadow-blue-900/30 transition-all cursor-pointer"
+            onClick={handleOpenAddQuestion}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold bg-blue-600 hover:bg-blue-500 text-white shadow-md shadow-blue-900/30 transition-all cursor-pointer active:scale-95"
           >
             <Plus className="w-4 h-4" />
             <span>Add Question</span>
@@ -716,6 +785,35 @@ export const InterviewPrepView: React.FC = () => {
             </select>
           </div>
         </div>
+      </div>
+
+      {/* Quick Inline Question Add Bar */}
+      <div className="p-3 sm:p-4 rounded-2xl bg-neutral-900 border border-neutral-800 shadow-xs">
+        <form onSubmit={handleQuickInlineAddQuestion} className="flex flex-col sm:flex-row gap-2">
+          <select
+            value={quickCategory}
+            onChange={(e) => setQuickCategory(e.target.value)}
+            className="px-3 py-2.5 text-xs font-semibold rounded-xl bg-neutral-950 border border-neutral-700 text-white shrink-0 focus:outline-none focus:border-blue-500 cursor-pointer"
+          >
+            {categories.map((cat) => (
+              <option key={cat} value={cat}>{cat}</option>
+            ))}
+          </select>
+          <input
+            type="text"
+            placeholder="Quick add question prompt... (Type and press Enter or click Add Question)"
+            value={quickPrompt}
+            onChange={(e) => setQuickPrompt(e.target.value)}
+            className="flex-1 px-3.5 py-2.5 text-sm rounded-xl bg-neutral-950 border border-neutral-700 text-white placeholder-neutral-500 focus:outline-none focus:border-blue-500 font-sans"
+          />
+          <button
+            type="submit"
+            className="flex items-center justify-center gap-1.5 px-5 py-2.5 text-xs sm:text-sm font-bold rounded-xl bg-blue-600 hover:bg-blue-500 text-white shadow-md shadow-blue-900/30 transition-all cursor-pointer active:scale-95 shrink-0"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Add Question</span>
+          </button>
+        </form>
       </div>
 
       {/* Questions Cards List */}
@@ -1149,12 +1247,39 @@ export const InterviewPrepView: React.FC = () => {
         })}
 
         {filteredQuestions.length === 0 && (
-          <div className="p-12 text-center rounded-2xl bg-neutral-900/60 border border-neutral-800">
-            <Mic2 className="w-10 h-10 mx-auto text-neutral-600 mb-2" />
+          <div className="p-12 text-center rounded-2xl bg-neutral-900/60 border border-neutral-800 space-y-3">
+            <Mic2 className="w-10 h-10 mx-auto text-neutral-600 mb-1" />
             <h3 className="text-sm font-bold text-neutral-300">No interview questions found</h3>
-            <p className="text-xs text-neutral-500 mt-1">
-              Click "+ Add Question" to register behavioral, consulting, or technical questions.
+            <p className="text-xs text-neutral-500 max-w-md mx-auto">
+              {questions.length === 0 
+                ? 'Your question bank is empty. Start adding your behavioral, consulting, and technical stories!' 
+                : 'No questions match the current search or filters. Click below to add a new question or clear filters.'}
             </p>
+            <div className="flex items-center justify-center gap-2 pt-2">
+              <button
+                type="button"
+                onClick={handleOpenAddQuestion}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white shadow-md shadow-blue-900/30 transition-all cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Add Question</span>
+              </button>
+              {(searchTerm || difficultyFilter !== 'All' || statusFilter !== 'All' || selectedCompanyFilter !== 'All' || selectedCategory !== 'All') && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchTerm('');
+                    setDifficultyFilter('All');
+                    setStatusFilter('All');
+                    setSelectedCompanyFilter('All');
+                    setSelectedCategory('All');
+                  }}
+                  className="px-3.5 py-2 rounded-xl text-xs font-semibold bg-neutral-800 hover:bg-neutral-700 text-neutral-300 transition-colors cursor-pointer"
+                >
+                  Clear Filters
+                </button>
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -1402,6 +1527,151 @@ export const InterviewPrepView: React.FC = () => {
                 <span>Save Practice Session & Increment Count</span>
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ADD QUESTION MODAL */}
+      {isAddQuestionModalOpen && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setIsAddQuestionModalOpen(false);
+          }}
+        >
+          <div className="w-full max-w-xl bg-neutral-900 border border-neutral-700/80 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-150">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-800 bg-neutral-950/80">
+              <div className="flex items-center gap-2">
+                <span className="p-1.5 rounded-lg bg-blue-600/20 text-blue-400">
+                  <Plus className="w-4 h-4" />
+                </span>
+                <span className="text-sm font-bold text-white uppercase tracking-wider">
+                  Add New Interview Question
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAddQuestionModalOpen(false)}
+                className="p-1 rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <form onSubmit={handleCreateQuestionSubmit} className="p-5 space-y-4 overflow-y-auto custom-scrollbar flex-1">
+              <div>
+                <label className="block text-xs font-semibold text-neutral-200 mb-1.5">
+                  Question Prompt <span className="text-rose-400">*</span>
+                </label>
+                <textarea
+                  rows={3}
+                  required
+                  autoFocus
+                  placeholder="e.g. Tell me about a time you led a cross-functional project under tight deadlines..."
+                  value={addQuestionForm.prompt}
+                  onChange={(e) => setAddQuestionForm(prev => ({ ...prev, prompt: e.target.value }))}
+                  className="w-full px-3.5 py-2.5 text-sm rounded-xl bg-neutral-950 border border-neutral-700 text-white placeholder-neutral-500 focus:outline-none focus:border-blue-500 font-sans leading-relaxed"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-300 mb-1">Category</label>
+                  <select
+                    value={addQuestionForm.category}
+                    onChange={(e) => setAddQuestionForm(prev => ({ ...prev, category: e.target.value }))}
+                    className="w-full px-3 py-2 text-xs sm:text-sm rounded-xl bg-neutral-950 border border-neutral-700 text-white focus:outline-none focus:border-blue-500"
+                  >
+                    {categories.map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-300 mb-1">Difficulty</label>
+                  <select
+                    value={addQuestionForm.difficulty}
+                    onChange={(e) => setAddQuestionForm(prev => ({ ...prev, difficulty: e.target.value as any }))}
+                    className="w-full px-3 py-2 text-xs sm:text-sm rounded-xl bg-neutral-950 border border-neutral-700 text-white focus:outline-none focus:border-blue-500"
+                  >
+                    <option value="Easy">Easy</option>
+                    <option value="Medium">Medium</option>
+                    <option value="Hard">Hard</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-300 mb-1">
+                    Company <span className="text-[10px] text-neutral-400">(Optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    list="add-modal-companies"
+                    placeholder="e.g. Google, BCG..."
+                    value={addQuestionForm.companyName}
+                    onChange={(e) => setAddQuestionForm(prev => ({ ...prev, companyName: e.target.value }))}
+                    className="w-full px-3 py-2 text-xs sm:text-sm rounded-xl bg-neutral-950 border border-neutral-700 text-white placeholder-neutral-500 focus:outline-none focus:border-blue-500"
+                  />
+                  <datalist id="add-modal-companies">
+                    {companies.map((c) => (
+                      <option key={c.id} value={c.name} />
+                    ))}
+                  </datalist>
+                </div>
+              </div>
+
+              {/* Prepared Answer Section */}
+              <div className="p-4 rounded-xl bg-blue-950/20 border border-blue-900/40 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-blue-300 uppercase tracking-wider flex items-center gap-1.5">
+                    <PenLine className="w-3.5 h-3.5 text-blue-400" />
+                    <span>Prepared Answer / Story Formulation (Optional)</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const template = `[Situation]: \n[Task]: \n[Action]: \n[Result]: `;
+                      setAddQuestionForm(prev => ({
+                        ...prev,
+                        answer: prev.answer.trim() ? `${template}\n\n${prev.answer}` : template
+                      }));
+                    }}
+                    className="text-[11px] text-blue-400 hover:text-blue-300 font-medium hover:underline cursor-pointer"
+                  >
+                    + Insert STAR
+                  </button>
+                </div>
+                <textarea
+                  rows={4}
+                  placeholder="Draft your key talking points or STAR story..."
+                  value={addQuestionForm.answer}
+                  onChange={(e) => setAddQuestionForm(prev => ({ ...prev, answer: e.target.value }))}
+                  className="w-full px-3.5 py-2.5 text-xs sm:text-sm rounded-xl bg-neutral-950 border border-neutral-700 text-white placeholder-neutral-500 focus:outline-none focus:border-blue-500 leading-relaxed font-sans"
+                />
+              </div>
+
+              {/* Modal Footer */}
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-neutral-800">
+                <button
+                  type="button"
+                  onClick={() => setIsAddQuestionModalOpen(false)}
+                  className="px-4 py-2 text-xs font-semibold rounded-xl bg-neutral-800 text-neutral-300 hover:bg-neutral-700 cursor-pointer transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={!addQuestionForm.prompt.trim()}
+                  className="flex items-center gap-1.5 px-5 py-2 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white shadow-md shadow-blue-900/30 transition-all cursor-pointer active:scale-95"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Create Question</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
